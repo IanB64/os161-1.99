@@ -396,6 +396,24 @@ cmd_kheapstats(int nargs, char **args)
 	return 0;
 }
 
+
+/*
+ * Command for dth.
+  *  Enable the output of debugging messages of type DB_THREADS.(Do nothing if already enabled)
+ */
+static
+int
+cmd_dth(int nargs, char **args)
+{
+	(void)nargs;
+	(void)args;
+	
+ 	dbflags = 0x0010; 
+	return 0;
+}
+
+
+
 ////////////////////////////////////////
 //
 // Menus.
@@ -437,6 +455,7 @@ static const char *opsmenu[] = {
 	"[sync]    Sync filesystems          ",
 	"[panic]   Intentional panic         ",
 	"[q]       Quit and shut down        ",
+	"[dth]       Enable the output of debugging messages of type DB_THREADS        ",
 	NULL
 };
 
@@ -547,6 +566,7 @@ static struct {
 	{ "sync",	cmd_sync },
 	{ "panic",	cmd_panic },
 	{ "q",		cmd_quit },
+	{ "dth",		cmd_dth },
 	{ "exit",	cmd_quit },
 	{ "halt",	cmd_quit },
 
