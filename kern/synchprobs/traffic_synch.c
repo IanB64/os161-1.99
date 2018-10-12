@@ -65,7 +65,7 @@ check_all_pairs(Traffic *car) {
 		if(!pass){
 			cv_wait(intersectionCV, intersectionLock);
 			return false;	//violated the rule, wait
-		}		
+		}
 	}
 	
 	KASSERT(lock_do_i_hold(intersectionLock));
