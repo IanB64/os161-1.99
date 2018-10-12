@@ -3,6 +3,7 @@
 #include <synchprobs.h>
 #include <synch.h>
 #include <opt-A1.h>
+#include <array.h>
 
 /* 
  * This simple default synchronization mechanism allows only vehicle at a time
@@ -11,6 +12,13 @@
  * before locks are implemented.
  */
 
+ typedef struct Traffic
+ {
+	 Direction origin;
+	 Direction destination;
+ }Traffic;
+ 
+ 
 /* 
  * Replace this default synchronization mechanism with your own (better) mechanism
  * needed for your solution.   Your mechanism may use any of the available synchronzation
@@ -18,10 +26,53 @@
  * declare other global variables if your solution requires them.
  */
 
-/*
- * replace this with declarations of any synchronization and other variables you need here
- */
-static struct semaphore *intersectionSem;
+static struct lock *intersectionLock;
+static struct cv *intersectionCV;
+struct array *vehicles;
+
+// forward declarations
+bool right_turn(Traffic *car);
+bool check_condition(Traffic *car1, Traffic *car2);
+bool check_all_pairs(Traffic *car); 
+
+// Check if route turns right
+bool
+right_turn(Traffic *car) {
+	KASSERT(car != NULL);
+	return (((car->origin == west) && (car->destination == south)) ||
+			((car->origin == south) && (car->destination == east)) ||
+			((car->origin == east) && (car->destination == north)) ||
+			((car->origin == north) && (car->destination == west)));
+}
+
+// Check if car1 and car2 can be in the intersection simultaneously
+bool
+check_condition(Traffic *car1, Traffic *car2) {
+	KASSERT(car1 != NULL && car2 != NULL);
+	return ((car1->origin == car2->origin) || 
+			((car1->origin == car2->destination) &&
+			(car1->destination == car2->origin)) ||
+			((car1->destination != car2->destination) &&
+			(right_turn(car1) || right_turn(car2))));
+}
+
+// Loop through the array of cars and compare them with the newly arrived 
+// car to see if it can join in the intersection
+bool
+check_all_pairs(Traffic *car) {
+	for(unsigned int i = 0; i < array_num(vehicles); i++){
+		bool pass = check_condition(array_get(vehicles, i), car);
+		if(!pass){
+			cv_wait(intersectionCV, intersectionLock);
+			return false;	//violated the rule, wait
+		}		
+	}
+	
+	KASSERT(lock_do_i_hold(intersectionLock));
+	array_add(vehicles, car, NULL);
+	return true;	//join the intersection
+}
+
 
 
 /* 
@@ -34,13 +85,15 @@ static struct semaphore *intersectionSem;
 void
 intersection_sync_init(void)
 {
-  /* replace this default implementation with your own implementation */
+	intersectionCV = cv_create("intersectionCV");
+	KASSERT(intersectionCV != NULL);
 
-  intersectionSem = sem_create("intersectionSem",1);
-  if (intersectionSem == NULL) {
-    panic("could not create intersection semaphore");
-  }
-  return;
+	intersectionLock = lock_create("intersectionLock");
+	KASSERT(intersectionLock != NULL);
+
+	vehicles = array_create();
+	array_init(vehicles); 
+	KASSERT(vehicles != NULL);
 }
 
 /* 
@@ -53,9 +106,13 @@ intersection_sync_init(void)
 void
 intersection_sync_cleanup(void)
 {
-  /* replace this default implementation with your own implementation */
-  KASSERT(intersectionSem != NULL);
-  sem_destroy(intersectionSem);
+	KASSERT(intersectionLock != NULL);
+	KASSERT(intersectionCV != NULL);
+	KASSERT(vehicles != NULL);
+
+	lock_destroy(intersectionLock);
+	cv_destroy(intersectionCV);
+	array_destroy(vehicles);
 }
 
 
@@ -75,11 +132,21 @@ intersection_sync_cleanup(void)
 void
 intersection_before_entry(Direction origin, Direction destination) 
 {
-  /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
-  (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  P(intersectionSem);
+	KASSERT(intersectionLock != NULL);
+	KASSERT(intersectionCV != NULL);
+	KASSERT(vehicles != NULL);
+
+	lock_acquire(intersectionLock);
+
+	Traffic *car = kmalloc(sizeof(struct Traffic));
+	KASSERT(car != NULL);
+	
+	car->origin = origin;
+	car->destination = destination;
+
+	while(!check_all_pairs(car)){}
+
+	lock_release(intersectionLock);  
 }
 
 
@@ -93,13 +160,24 @@ intersection_before_entry(Direction origin, Direction destination)
  *
  * return value: none
  */
-
-void
+ void
 intersection_after_exit(Direction origin, Direction destination) 
 {
-  /* replace this default implementation with your own implementation */
-  (void)origin;  /* avoid compiler complaint about unused parameter */
-  (void)destination; /* avoid compiler complaint about unused parameter */
-  KASSERT(intersectionSem != NULL);
-  V(intersectionSem);
+	KASSERT(intersectionLock != NULL);
+	KASSERT(intersectionCV != NULL);
+	KASSERT(vehicles != NULL);
+
+	lock_acquire(intersectionLock);
+
+	for(unsigned int i = 0; i < array_num(vehicles); i++){
+		Traffic *car = array_get(vehicles, i);
+		if(car->origin == origin && car->destination == destination){
+			array_remove(vehicles, i);
+			cv_broadcast(intersectionCV, intersectionLock);
+			break;
+		}
+	}
+	
+	lock_release(intersectionLock);
 }
+
