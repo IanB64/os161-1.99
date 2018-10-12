@@ -36,7 +36,7 @@
 
 
 #include <spinlock.h>
-#include <queue.h>     /////////////for fairness///////////
+#include <queue.h>     /******for fairness******/
 /*
  * Dijkstra-style semaphore.
  *
@@ -77,7 +77,7 @@ struct lock {
 	struct spinlock lk_sl;
 	struct wchan *lk_wchan;
 	volatile struct thread *held;
-	struct queue *lk_queue;     //////////////for fairness///////////
+	struct queue *lk_queue;     /******for fairness******/
 	// add what you need here
 	// (don't forget to mark things volatile as needed)
 };
