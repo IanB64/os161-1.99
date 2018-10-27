@@ -172,13 +172,13 @@ lock_create(const char *name)
 	}
 
 	/******for fairness******/
-    lock->lk_queue = q_create(1); 
+/*    lock->lk_queue = q_create(1); 
     if(lock->lk_queue == NULL){
         kfree(lock->lk_name);
 		kfree(lock->lk_wchan);
 		kfree(lock);
 		return NULL;
-	}
+	}*/
 	
 	lock->held = NULL;
 	spinlock_init(&lock->lk_sl);
@@ -191,7 +191,7 @@ lock_destroy(struct lock *lock)
 	KASSERT(lock != NULL);
 	spinlock_cleanup(&lock->lk_sl);
 	wchan_destroy(lock->lk_wchan);
-	q_destroy(lock->lk_queue);
+//	q_destroy(lock->lk_queue);		/******for fairness******/
 	kfree(lock->lk_name);
 	kfree(lock);
 }
@@ -206,9 +206,9 @@ lock_acquire(struct lock *lock)
 	KASSERT(lock_do_i_hold(lock) == false);
 
 	spinlock_acquire(&lock->lk_sl);
-	q_addtail(lock->lk_queue, curthread);   	/******for fairness******/
-	while(lock->held != NULL || 
-		(q_peek(lock->lk_queue) != curthread))	/******for fairness******/
+	//q_addtail(lock->lk_queue, curthread);   	/******for fairness******/
+	while(lock->held != NULL)// || 
+	//	(q_peek(lock->lk_queue) != curthread))	/******for fairness******/
 	{
 	    wchan_lock(lock->lk_wchan);
 		spinlock_release(&lock->lk_sl);
@@ -216,7 +216,7 @@ lock_acquire(struct lock *lock)
 		spinlock_acquire(&lock->lk_sl);
 	}
 	lock->held = curthread;
-	q_remhead(lock->lk_queue);					/******for fairness******/
+	//q_remhead(lock->lk_queue);					/******for fairness******/
 	spinlock_release(&lock->lk_sl);
 }
 

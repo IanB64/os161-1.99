@@ -50,6 +50,8 @@
 #include <vfs.h>
 #include <synch.h>
 #include <kern/fcntl.h>  
+#include "opt-A2.h"
+#include <limits.h>
 
 /*
  * The process for the kernel; this holds all the kernel-only threads.
@@ -69,6 +71,11 @@ static struct semaphore *proc_count_mutex;
 struct semaphore *no_proc_sem;   
 #endif  // UW
 
+#if OPT_A2
+	static processID *all_Pids[PID_MAX];
+	
+	static struct lock *proc_id_lock;
+#endif /*OPT_A2*/
 
 
 /*
@@ -163,6 +170,12 @@ proc_destroy(struct proc *proc)
 	}
 #endif // UW
 
+#if OPT_A2
+
+	pid_destroy(proc->proc_pid);
+
+#endif
+
 	threadarray_cleanup(&proc->p_threads);
 	spinlock_cleanup(&proc->p_lock);
 
@@ -183,8 +196,6 @@ proc_destroy(struct proc *proc)
 	}
 	V(proc_count_mutex);
 #endif // UW
-	
-
 }
 
 /*
@@ -207,6 +218,16 @@ proc_bootstrap(void)
   if (no_proc_sem == NULL) {
     panic("could not create no_proc_sem semaphore\n");
   }
+  
+#if OPT_A2
+  
+  proc_id_lock = lock_create("proc_id_lock");
+  if(proc_id_lock == NULL){
+	panic("fail to create proc_id_lock");
+  }	
+
+#endif /*OPT_A2*/
+
 #endif // UW 
 }
 
@@ -226,7 +247,17 @@ proc_create_runprogram(const char *name)
 	if (proc == NULL) {
 		return NULL;
 	}
+	
+#if OPT_A2
 
+	proc->proc_pid = pid_create();
+	if( !proc->proc_pid) {
+	  kfree(proc);
+	  return NULL;
+	}
+	
+#endif
+	
 #ifdef UW
 	/* open the console - this should always succeed */
 	console_path = kstrdup("con:");
@@ -364,3 +395,112 @@ curproc_setas(struct addrspace *newas)
 	spinlock_release(&proc->p_lock);
 	return oldas;
 }
+
+#if OPT_A2
+
+pid_t
+pid_create(void){
+	lock_acquire(proc_id_lock);
+	
+	pid_t pid;
+	
+	//find available PID
+	for(pid_t p = PID_MIN; p < PID_MAX; p++) {
+		if (all_Pids[p] == NULL) {
+			pid = p;
+			break;
+		}
+	}
+	
+	all_Pids[pid] = kmalloc(sizeof(processID*));
+	if (all_Pids[pid] == NULL) {
+		return 0;
+	}
+	
+	all_Pids[pid]->parentPID = 0;
+	all_Pids[pid]->exitCode = 0;
+	all_Pids[pid]->hasExited = false;
+	all_Pids[pid]->exit_lock = lock_create("exit_lock");
+	if (all_Pids[pid]->exit_lock == NULL) {
+		kfree(all_Pids[pid]);
+		return 0;
+	}
+	
+	all_Pids[pid]->exit_cv = cv_create("exit_cv");
+	if (all_Pids[pid]->exit_cv == NULL) {
+		kfree(all_Pids[pid]);
+		return 0;
+	}
+	
+	/*
+	all_Pids[pid]->pid_sem = sem_create("pid_sem", 0);
+	if (all_Pids[pid]->pid_sem == NULL) {
+		kfree(all_Pids[pid]);
+		return NULL;
+	}
+	*/
+	
+	
+	lock_release(proc_id_lock);
+	
+	return pid;
+}
+
+void
+pid_destroy(pid_t pid){
+	lock_acquire(proc_id_lock);
+	if(all_Pids[all_Pids[pid]->parentPID] == NULL) {
+		lock_destroy(all_Pids[pid]->exit_lock);
+		cv_destroy(all_Pids[pid]->exit_cv);
+		kfree(all_Pids[pid]);
+		all_Pids[pid] = NULL;
+
+	}
+
+	lock_release(proc_id_lock);
+}
+
+bool 
+pid_check_if_exists(pid_t pid){
+	return all_Pids[pid] != NULL;
+}
+
+void
+pid_set_parent_pid(pid_t child, pid_t parent){
+	all_Pids[child]->parentPID = parent;
+}
+
+pid_t
+pid_get_parent_pid(pid_t pid){
+	return all_Pids[pid]->parentPID;
+}
+
+void
+pid_set_exitstatus(pid_t pid, int exitCode){
+	all_Pids[pid]->exitCode = exitCode;
+}
+
+int 
+pid_get_exitstatus(pid_t pid){
+	return all_Pids[pid]->exitCode;
+}
+
+void
+pid_set_has_exited(pid_t pid, bool hasExited){
+	all_Pids[pid]->hasExited = hasExited;
+}
+
+bool
+pid_get_has_exited(pid_t pid){
+	return all_Pids[pid]->hasExited;
+}
+
+struct lock *pid_get_exit_lock(pid_t pid){
+	return all_Pids[pid]->exit_lock;
+}	
+
+struct cv *pid_get_exit_cv(pid_t pid){
+	return all_Pids[pid]->exit_cv;
+}
+
+#endif

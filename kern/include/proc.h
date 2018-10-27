@@ -38,6 +38,7 @@
 
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
+#include "opt-A2.h"
 
 struct addrspace;
 struct vnode;
@@ -69,7 +70,57 @@ struct proc {
 #endif
 
 	/* add more material here as needed */
+	
+	#if OPT_A2
+		pid_t proc_pid;
+	#endif /*OPT_A2*/
 };
+
+
+#if OPT_A2
+
+//Pid of the currentproc/child will be it's position in the process array
+typedef struct {
+
+	pid_t parentPID;
+	
+	int exitCode;
+	bool hasExited;
+	
+	//synchronization primitives for exit, waitpid
+  	struct lock *exit_lock;
+	struct cv *exit_cv;
+  	
+} processID;
+
+#endif /* OPT_A2 */
+
+#if OPT_A2
+
+	pid_t pid_create(void);
+
+	void pid_destroy(pid_t pid);
+	
+	bool pid_check_if_exists(pid_t pid);
+
+    void pid_set_parent_pid(pid_t child, pid_t parent);
+
+    pid_t pid_get_parent_pid(pid_t pid);
+
+    void pid_set_exitstatus(pid_t pid, int exitCode);
+
+    int pid_get_exitstatus(pid_t pid);
+
+    void pid_set_has_exited(pid_t pid, bool hasExited);
+
+    bool pid_get_has_exited(pid_t pid);
+	
+	struct lock *pid_get_exit_lock(pid_t pid);
+	
+	struct cv *pid_get_exit_cv(pid_t pid);
+#endif /* OPT_A2 */
+
+
 
 /* This is the process structure for the kernel and for kernel-only threads. */
 extern struct proc *kproc;
