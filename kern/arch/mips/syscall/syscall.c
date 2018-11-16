@@ -142,7 +142,7 @@ syscall(struct trapframe *tf)
             break;
 
 		case SYS_execv:
-			err = execv((const char *)tf->tf_a0,(char **)tf->tf_a1);
+			err = execv((userptr_t)tf->tf_a0,(userptr_t)tf->tf_a1);
             break;
 
 #endif //OPT_A2
@@ -210,8 +210,6 @@ enter_forked_process(struct trapframe *tf)
     stacktf.tf_a3 = 0;
     stacktf.tf_epc +=4;
 
-    as_activate();
-
     mips_usermode(&stacktf);
 
     panic("mips_usermode fail to return");
@@ -222,6 +220,5 @@ enter_forked_process(struct trapframe *tf)
 
 #endif //OPT_A2
 }
-
 
 

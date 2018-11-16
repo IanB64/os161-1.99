@@ -226,21 +226,6 @@ proc_bootstrap(void)
     if (no_proc_sem == NULL) {
         panic("could not create no_proc_sem semaphore\n");
     }
-
-#if OPT_A2
-
-    pid_lock = lock_create("pid_lock");
-    if (pid_lock == NULL) {
-        panic("could not create pid_lock\n");
-    }
-
-    pid_cv = cv_create("pid_cv");
-    if (pid_cv == NULL) {
-        panic("could not create pid_cv\n");
-    }
-
-#endif //OPT_A2
-
 #endif // UW 
 }
 
@@ -262,14 +247,31 @@ proc_create_runprogram(const char *name)
     }
 
 #if OPT_A2
-
+	
+	//only create once when first user process is created
+    if(pid_lock == NULL) {
+        pid_lock = lock_create("pid_lock");
+        if (pid_lock == NULL) {
+            panic("could not create pid_lock\n");
+        }
+    }
+    
+	//only create once when first user process is created
+    if(pid_cv == NULL) {
+        pid_cv = cv_create("pid_cv");
+        if (pid_cv == NULL) {
+            panic("could not create pid_cv\n");
+        }
+    }
+    
     proc->pid_node = pid_create();
     if(proc->pid_node == NULL) {
         kfree(proc->p_name);
         kfree(proc);
         return NULL;
     }
-    //first pid node (created by first proc)as the pid tree root
+    
+	//first pid node (created by first proc)as the pid tree root
     if(pid_tree_root == NULL) {
         pid_tree_root = proc->pid_node;
     }
@@ -477,6 +479,10 @@ pid_destroy(struct pid_node_t * pid_node)
     pid_tree_root = NULL;//reset tree root as NULL
     pid = PID_MIN;//reset pid num to PID_MIN
     lock_release(pid_lock);
+    lock_destroy(pid_lock);
+    pid_lock = NULL;
+    cv_destroy(pid_cv);
+    pid_cv = NULL;
 }
 
 //set not interested flag to all children nodes
@@ -505,13 +511,13 @@ pid_getpid(struct pid_node_t *pid_node)
 
 //find a child node with pid specified
 struct pid_node_t *
-pid_find_child(struct pid_node_t *parent, pid_t child_pid)
+pid_find_child(struct pid_node_t *pid_node, pid_t child_pid)
 {
-    KASSERT(parent != NULL);
+    KASSERT(pid_node != NULL);
     KASSERT(child_pid >= PID_MIN && child_pid <= PID_MAX);
 
     lock_acquire(pid_lock);
-    struct pid_node_t *p = parent->left_child;
+    struct pid_node_t *p = pid_node->left_child;
     while(p != NULL) {
         if(p->pid == child_pid) {
             break;//found the child with pid
@@ -524,19 +530,19 @@ pid_find_child(struct pid_node_t *parent, pid_t child_pid)
 
 //add a child node, the elder lef child and all siblings become its right siblings
 void
-pid_add_child(struct pid_node_t *parent, struct pid_node_t *child)
+pid_add_child(struct pid_node_t *pid_node, struct pid_node_t *child)
 {
-    KASSERT(parent != NULL);
+    KASSERT(pid_node != NULL);
     KASSERT(child != NULL);
 
     lock_acquire(pid_lock);
-    if(parent->left_child == NULL) {
-        parent->left_child = child;
+    if(pid_node->left_child == NULL) {
+        pid_node->left_child = child;
     } else {
-        //the parent left child(elder child) become its rigt sibling
-        child->right_sibling = parent->left_child;
-        //the new child become the parent left child
-        parent->left_child = child;
+        //the left child(elder child) become its rigt sibling
+        child->right_sibling = pid_node->left_child;
+        //the new child become the its left child
+        pid_node->left_child = child;
     }
     child->interested = true;
     lock_release(pid_lock);
@@ -571,6 +577,5 @@ pid_get_exitcode(struct pid_node_t *pid_node)
 }
 
 #endif //OPT_A2
-
 
 

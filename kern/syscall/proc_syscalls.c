@@ -125,10 +125,8 @@ sys_waitpid(pid_t pid,
     }
 
 #if OPT_A2
-    pid_t child_pid = pid;
-    struct proc *parent_proc = curproc;
 
-    struct pid_node_t *child = pid_find_child(parent_proc->pid_node, child_pid);
+    struct pid_node_t *child = pid_find_child(curproc->pid_node, pid);
     if(!child) {
         return ECHILD;
     }
@@ -170,74 +168,70 @@ static void entrypoint(void * ptr, unsigned long unusedval)
 }
 
 //user process fork handler
-int sys_fork(struct trapframe *parent_trapframe, pid_t *retval)
+int sys_fork(struct trapframe *tf, pid_t *retval)
 {
     KASSERT(curproc != NULL);
-    KASSERT(parent_trapframe != NULL);
+    KASSERT(tf != NULL);
     KASSERT(retval != NULL);
 
     int result;
-    struct proc *parent_proc = curproc;
 
-    struct trapframe *child_trapframe = kmalloc(sizeof(struct trapframe));
+    struct trapframe *child_tf = kmalloc(sizeof(struct trapframe));
 
-    if (child_trapframe == NULL) {
+    if (child_tf == NULL) {
         return ENOMEM;
     }
 
-    //copy parent trapframe to child trapframe
-    *child_trapframe = *parent_trapframe;
+    //copy trapframe to its child
+    *child_tf = *tf;
     //create a child process
-    struct proc *child_proc = proc_create_runprogram("child_proc");
+    struct proc *child_proc = proc_create_runprogram(curproc->p_name);
     if (child_proc == NULL) {
-        kfree(child_trapframe);
+        kfree(child_tf);
         return(ENPROC);
     }
-    //copy address space of parent process to address space of parent child
-    result = as_copy(parent_proc->p_addrspace, &child_proc->p_addrspace);
+    //copy address space to its child
+    result = as_copy(curproc->p_addrspace, &child_proc->p_addrspace);
     if(result) {
-        kfree(child_trapframe);
+        kfree(child_tf);
         proc_destroy(child_proc);
         return result;
     }
 
     //add a new child
-    pid_add_child(parent_proc->pid_node, child_proc->pid_node);
+    pid_add_child(curproc->pid_node, child_proc->pid_node);
 
-    result = thread_fork("child_thread", child_proc, entrypoint,
-                         child_trapframe, 0);
+    result = thread_fork(curthread->t_name, child_proc, entrypoint,
+                         child_tf, 0);
 
     if (result) {
         as_destroy(child_proc->p_addrspace);
         proc_destroy(child_proc);
-        kfree(child_trapframe);
+        kfree(child_tf);
         return result;
     }
+
     //return child's pid
     *retval = pid_getpid(child_proc->pid_node);
-
     return 0;
 }
 
 //user process execv handler
 int
-execv(const char *progname, char **args)
+execv(userptr_t progname, userptr_t args)
 {
+    if(progname == NULL) {
+        return ENOENT;
+    }
 
-	
-	//check errors
-	if(args == NULL){ 
-		return EFAULT;
-	}
-	
-	if(progname == NULL){
-		return ENOENT;
-	}
+    if(args == NULL) {
+        return EFAULT;
+    }
 
-	if(strlen((char *)progname) > PATH_MAX){
-		return E2BIG;
-	}
-	
+    if(strlen((char *)progname) > PATH_MAX) {
+        return E2BIG;
+    }
+
     vaddr_t entrypoint, stackptr;
     int result;
     size_t actual_len;//just for  the last argument of copyoutsrt()
@@ -256,8 +250,8 @@ execv(const char *progname, char **args)
     while(argv_from[argc] != NULL) {
         argc++;
     }
-	
-	//request memory for arguments pointer temporarily
+
+    //request memory for arguments pointer temporarily
     char **argv_kernel = kmalloc(sizeof(char *) * argc);
     if(argv_kernel == NULL) {
         return ENOMEM;
@@ -302,9 +296,9 @@ execv(const char *progname, char **args)
     }
 
     //arguments pointers for storing pointer to aguments in userspace stack
-	vaddr_t *argv_to = (vaddr_t *)kmalloc(sizeof(vaddr_t) * argc);
-    
-	//Copy out arguments from kernel to user space
+    vaddr_t *argv_to = (vaddr_t *)kmalloc(sizeof(vaddr_t) * argc);
+
+    //Copy out arguments from kernel to user space
     for(int i = 0; i < argc; i++) {
         int len = strlen(argv_kernel[i]) + 1;
         stackptr -= ROUNDUP(len, 8);
@@ -324,11 +318,12 @@ execv(const char *progname, char **args)
             return result;
         }
     }
-	
-	//free all allocated memory
+
+    //free all allocated memory
     for(int i = 0; i < argc; i++) {
         kfree(argv_kernel[i]);
     }
+    kfree(argv_kernel);
     kfree(argv_to);
 
     /* Warp to user mode. */
@@ -343,7 +338,6 @@ execv(const char *progname, char **args)
 }
 
 #endif //OPT_A2
-
 
 
 

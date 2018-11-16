@@ -88,7 +88,7 @@ struct proc {
     /* add more material here as needed */
 
 #if OPT_A2
-
+    struct trapframe *tf;
     struct pid_node_t *pid_node;
 
 #endif //OPT_A2
@@ -102,8 +102,8 @@ struct pid_node_t *pid_create(void);
 void pid_set_children_not_interested(struct pid_node_t *pid_node);
 void pid_destroy(struct pid_node_t * pid_tree_root);
 pid_t pid_getpid(struct pid_node_t *pid_node);
-struct pid_node_t *pid_find_child(struct pid_node_t *parent, pid_t child_pid);
-void pid_add_child(struct pid_node_t *parent, struct pid_node_t *child);
+struct pid_node_t *pid_find_child(struct pid_node_t *pid_node, pid_t child_pid);
+void pid_add_child(struct pid_node_t *pid_node, struct pid_node_t *child);
 void pid_set_exit(struct pid_node_t *pid_node, int exitcode);
 bool pid_is_exited(struct pid_node_t *pid_node);
 int pid_get_exitcode(struct pid_node_t *pid_node);
