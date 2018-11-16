@@ -142,7 +142,7 @@ syscall(struct trapframe *tf)
             break;
 
 		case SYS_execv:
-			err = execv((userptr_t)tf->tf_a0,(userptr_t)tf->tf_a1);
+			err = execv((const char *)tf->tf_a0,(char **)tf->tf_a1);
             break;
 
 #endif //OPT_A2

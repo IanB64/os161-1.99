@@ -70,7 +70,7 @@ int sys_waitpid(pid_t pid, userptr_t status, int options, pid_t *retval);
 #if OPT_A2
 
 int sys_fork(struct trapframe *tf, pid_t *retval);
-int execv(userptr_t progname, userptr_t args);
+int execv(const char *progname, char **args);
 
 #endif //OPT_A2
 

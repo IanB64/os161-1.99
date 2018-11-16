@@ -218,7 +218,7 @@ int sys_fork(struct trapframe *tf, pid_t *retval)
 
 //user process execv handler
 int
-execv(userptr_t progname, userptr_t args)
+execv(const char *progname, char **args)
 {
     if(progname == NULL) {
         return ENOENT;
