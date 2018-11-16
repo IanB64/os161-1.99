@@ -46,6 +46,12 @@
 #include "opt-sfs.h"
 #include "opt-net.h"
 
+//ASST2b
+#include "opt-A2.h"
+#include <test.h>
+//ASST2b
+
+
 /*
  * In-kernel menu and command dispatcher.
  */
@@ -93,16 +99,31 @@ cmd_progthread(void *ptr, unsigned long nargs)
 
 	KASSERT(nargs >= 1);
 
+#if OPT_A2
+
+#else
+
 	if (nargs > 2) {
 		kprintf("Warning: argument passing from menu not supported\n");
 	}
+
+#endif // OPT_A2
 
 	/* Hope we fit. */
 	KASSERT(strlen(args[0]) < sizeof(progname));
 
 	strcpy(progname, args[0]);
 
+#if OPT_A2
+
+	result = runprogram(progname, nargs, args);
+
+#else
+
 	result = runprogram(progname);
+
+#endif // OPT_A2
+	
 	if (result) {
 		kprintf("Running program %s failed: %s\n", args[0],
 			strerror(result));
@@ -408,7 +429,7 @@ cmd_dth(int nargs, char **args)
 	(void)nargs;
 	(void)args;
 	
- 	dbflags = 0x0010; 
+ 	dbflags = DB_THREADS; 
 	return 0;
 }
 
@@ -731,3 +752,4 @@ menu(char *args)
 		menu_execute(buf, 0);
 	}
 }
+

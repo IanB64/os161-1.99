@@ -35,9 +35,11 @@
 #include <thread.h>
 #include <current.h>
 #include <syscall.h>
+
+//ASST2
 #include "opt-A2.h"
 #include <addrspace.h>
-
+//ASST2
 
 /*
  * System call dispatcher.
@@ -80,105 +82,108 @@
 void
 syscall(struct trapframe *tf)
 {
-	int callno;
-	int32_t retval;
-	int err;
+    int callno;
+    int32_t retval;
+    int err;
 
-	KASSERT(curthread != NULL);
-	KASSERT(curthread->t_curspl == 0);
-	KASSERT(curthread->t_iplhigh_count == 0);
+    KASSERT(curthread != NULL);
+    KASSERT(curthread->t_curspl == 0);
+    KASSERT(curthread->t_iplhigh_count == 0);
 
-	callno = tf->tf_v0;
+    callno = tf->tf_v0;
 
-	/*
-	 * Initialize retval to 0. Many of the system calls don't
-	 * really return a value, just 0 for success and -1 on
-	 * error. Since retval is the value returned on success,
-	 * initialize it to 0 by default; thus it's not necessary to
-	 * deal with it except for calls that return other values, 
-	 * like write.
-	 */
+    /*
+     * Initialize retval to 0. Many of the system calls don't
+     * really return a value, just 0 for success and -1 on
+     * error. Since retval is the value returned on success,
+     * initialize it to 0 by default; thus it's not necessary to
+     * deal with it except for calls that return other values,
+     * like write.
+     */
 
-	retval = 0;
+    retval = 0;
 
-	switch (callno) {
-	    case SYS_reboot:
-		err = sys_reboot(tf->tf_a0);
-		break;
+    switch (callno) {
+        case SYS_reboot:
+            err = sys_reboot(tf->tf_a0);
+            break;
 
-	    case SYS___time:
-		err = sys___time((userptr_t)tf->tf_a0,
-				 (userptr_t)tf->tf_a1);
-		break;
+        case SYS___time:
+            err = sys___time((userptr_t)tf->tf_a0,
+                             (userptr_t)tf->tf_a1);
+            break;
 #ifdef UW
-	case SYS_write:
-	  err = sys_write((int)tf->tf_a0,
-			  (userptr_t)tf->tf_a1,
-			  (int)tf->tf_a2,
-			  (int *)(&retval));
-	  break;
-	case SYS__exit:
-	  sys__exit((int)tf->tf_a0);
-	  /* sys__exit does not return, execution should not get here */
-	  panic("unexpected return from sys__exit");
-	  break;
-	case SYS_getpid:
-	  err = sys_getpid((pid_t *)&retval);
-	  break;
-	case SYS_waitpid:
-	  err = sys_waitpid((pid_t)tf->tf_a0,
-			    (userptr_t)tf->tf_a1,
-			    (int)tf->tf_a2,
-			    (pid_t *)&retval);
-	  break;
-	
-	
+        case SYS_write:
+            err = sys_write((int)tf->tf_a0,
+                            (userptr_t)tf->tf_a1,
+                            (int)tf->tf_a2,
+                            (int *)(&retval));
+            break;
+        case SYS__exit:
+            sys__exit((int)tf->tf_a0);
+            /* sys__exit does not return, execution should not get here */
+            panic("unexpected return from sys__exit");
+            break;
+        case SYS_getpid:
+            err = sys_getpid((pid_t *)&retval);
+            break;
+        case SYS_waitpid:
+            err = sys_waitpid((pid_t)tf->tf_a0,
+                              (userptr_t)tf->tf_a1,
+                              (int)tf->tf_a2,
+                              (pid_t *)&retval);
+            break;
+
+
 #if OPT_A2
 
-	case SYS_fork:
-		err = sys_fork(tf,(pid_t*)&retval);
-		break;
+        case SYS_fork:
+            err = sys_fork(tf,(pid_t*)&retval);
+            break;
 
-#endif /*OPT_A2*/
-	
-	
+		case SYS_execv:
+			err = execv((const char *)tf->tf_a0,(char **)tf->tf_a1);
+            break;
+
+#endif //OPT_A2
+
+
 #endif // UW
 
-	    /* Add stuff here */
+            /* Add stuff here */
 
-	default:
-	  kprintf("Unknown syscall %d\n", callno);
-	  err = ENOSYS;
-	  break;
-	}
+        default:
+            kprintf("Unknown syscall %d\n", callno);
+            err = ENOSYS;
+            break;
+    }
 
 
-	if (err) {
-		/*
-		 * Return the error code. This gets converted at
-		 * userlevel to a return value of -1 and the error
-		 * code in errno.
-		 */
-		tf->tf_v0 = err;
-		tf->tf_a3 = 1;      /* signal an error */
-	}
-	else {
-		/* Success. */
-		tf->tf_v0 = retval;
-		tf->tf_a3 = 0;      /* signal no error */
-	}
-	
-	/*
-	 * Now, advance the program counter, to avoid restarting
-	 * the syscall over and over again.
-	 */
-	
-	tf->tf_epc += 4;
+    if (err) {
+        /*
+         * Return the error code. This gets converted at
+         * userlevel to a return value of -1 and the error
+         * code in errno.
+         */
+        tf->tf_v0 = err;
+        tf->tf_a3 = 1;      /* signal an error */
+    } else {
+        /* Success. */
+        tf->tf_v0 = retval;
+        tf->tf_a3 = 0;      /* signal no error */
+    }
 
-	/* Make sure the syscall code didn't forget to lower spl */
-	KASSERT(curthread->t_curspl == 0);
-	/* ...or leak any spinlocks */
-	KASSERT(curthread->t_iplhigh_count == 0);
+    /*
+     * Now, advance the program counter, to avoid restarting
+     * the syscall over and over again.
+     */
+
+    tf->tf_epc += 4;
+
+    /* Make sure the syscall code didn't forget to lower spl */
+    KASSERT(curthread->t_curspl == 0);
+    /* ...or leak any spinlocks */
+    KASSERT(curthread->t_iplhigh_count == 0);
 }
 
 /*
@@ -194,26 +199,29 @@ enter_forked_process(struct trapframe *tf)
 {
 #if OPT_A2
 
-	KASSERT(tf != NULL);
-		
-	struct trapframe stacktf;
+    KASSERT(tf != NULL);
 
-	stacktf = *tf;
-	kfree(tf);
+    struct trapframe stacktf;
 
-	stacktf.tf_v0 = 0;
-	stacktf.tf_a3 = 0;
-	stacktf.tf_epc +=4;	
-	
-	as_activate();
-	
-	mips_usermode(&stacktf);		
-	
-	panic("mips_usermode fail to return");
+    stacktf = *tf;
+    kfree(tf);
+
+    stacktf.tf_v0 = 0;
+    stacktf.tf_a3 = 0;
+    stacktf.tf_epc +=4;
+
+    as_activate();
+
+    mips_usermode(&stacktf);
+
+    panic("mips_usermode fail to return");
 
 #else
 
-	(void)tf;	
+    (void)tf;
 
-#endif /*OPT_A2*/
+#endif //OPT_A2
 }
+
+
+

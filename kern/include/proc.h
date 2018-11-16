@@ -38,7 +38,10 @@
 
 #include <spinlock.h>
 #include <thread.h> /* required for struct threadarray */
+
+//ASST2
 #include "opt-A2.h"
+//ASST2
 
 struct addrspace;
 struct vnode;
@@ -46,81 +49,66 @@ struct vnode;
 struct semaphore;
 #endif // UW
 
+#if OPT_A2
+
+struct pid_node_t {
+    struct pid_node_t *left_child;
+    struct pid_node_t *right_sibling;
+    bool interested;
+    bool exited;
+    int exitcode;
+    pid_t pid;
+};
+
+#endif //OPT_A2
+
 /*
  * Process structure.
  */
 struct proc {
-	char *p_name;			/* Name of this process */
-	struct spinlock p_lock;		/* Lock for this structure */
-	struct threadarray p_threads;	/* Threads in this process */
+    char *p_name;			/* Name of this process */
+    struct spinlock p_lock;		/* Lock for this structure */
+    struct threadarray p_threads;	/* Threads in this process */
 
-	/* VM */
-	struct addrspace *p_addrspace;	/* virtual address space */
+    /* VM */
+    struct addrspace *p_addrspace;	/* virtual address space */
 
-	/* VFS */
-	struct vnode *p_cwd;		/* current working directory */
+    /* VFS */
+    struct vnode *p_cwd;		/* current working directory */
 
 #ifdef UW
-  /* a vnode to refer to the console device */
-  /* this is a quick-and-dirty way to get console writes working */
-  /* you will probably need to change this when implementing file-related
-     system calls, since each process will need to keep track of all files
-     it has opened, not just the console. */
-  struct vnode *console;                /* a vnode for the console device */
+    /* a vnode to refer to the console device */
+    /* this is a quick-and-dirty way to get console writes working */
+    /* you will probably need to change this when implementing file-related
+       system calls, since each process will need to keep track of all files
+       it has opened, not just the console. */
+    struct vnode *console;                /* a vnode for the console device */
 #endif
 
-	/* add more material here as needed */
-	
-	#if OPT_A2
-		pid_t proc_pid;
-	#endif /*OPT_A2*/
+    /* add more material here as needed */
+
+#if OPT_A2
+
+    struct pid_node_t *pid_node;
+
+#endif //OPT_A2
 };
 
-
 #if OPT_A2
+extern struct lock *pid_lock;
+extern struct cv *pid_cv;
 
-//Pid of the currentproc/child will be it's position in the process array
-typedef struct {
+struct pid_node_t *pid_create(void);
+void pid_set_children_not_interested(struct pid_node_t *pid_node);
+void pid_destroy(struct pid_node_t * pid_tree_root);
+pid_t pid_getpid(struct pid_node_t *pid_node);
+struct pid_node_t *pid_find_child(struct pid_node_t *parent, pid_t child_pid);
+void pid_add_child(struct pid_node_t *parent, struct pid_node_t *child);
+void pid_set_exit(struct pid_node_t *pid_node, int exitcode);
+bool pid_is_exited(struct pid_node_t *pid_node);
+int pid_get_exitcode(struct pid_node_t *pid_node);
 
-	pid_t parentPID;
-	
-	int exitCode;
-	bool hasExited;
-	
-	//synchronization primitives for exit, waitpid
-  	struct lock *exit_lock;
-	struct cv *exit_cv;
-  	
-} processID;
-
-#endif /* OPT_A2 */
-
-#if OPT_A2
-
-	pid_t pid_create(void);
-
-	void pid_destroy(pid_t pid);
-	
-	bool pid_check_if_exists(pid_t pid);
-
-    void pid_set_parent_pid(pid_t child, pid_t parent);
-
-    pid_t pid_get_parent_pid(pid_t pid);
-
-    void pid_set_exitstatus(pid_t pid, int exitCode);
-
-    int pid_get_exitstatus(pid_t pid);
-
-    void pid_set_has_exited(pid_t pid, bool hasExited);
-
-    bool pid_get_has_exited(pid_t pid);
-	
-	struct lock *pid_get_exit_lock(pid_t pid);
-	
-	struct cv *pid_get_exit_cv(pid_t pid);
-#endif /* OPT_A2 */
-
-
+#endif //OPT_A2
 
 /* This is the process structure for the kernel and for kernel-only threads. */
 extern struct proc *kproc;
@@ -153,3 +141,4 @@ struct addrspace *curproc_setas(struct addrspace *);
 
 
 #endif /* _PROC_H_ */
+

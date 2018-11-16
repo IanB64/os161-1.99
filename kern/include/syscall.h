@@ -30,7 +30,9 @@
 #ifndef _SYSCALL_H_
 #define _SYSCALL_H_
 
+//ASST2
 #include "opt-A2.h"
+//ASST2
 
 struct trapframe; /* from <machine/trapframe.h> */
 
@@ -49,7 +51,7 @@ void enter_forked_process(struct trapframe *tf);
 
 /* Enter user mode. Does not return. */
 void enter_new_process(int argc, userptr_t argv, vaddr_t stackptr,
-		       vaddr_t entrypoint);
+                       vaddr_t entrypoint);
 
 
 /*
@@ -66,9 +68,15 @@ int sys_getpid(pid_t *retval);
 int sys_waitpid(pid_t pid, userptr_t status, int options, pid_t *retval);
 
 #if OPT_A2
+
 int sys_fork(struct trapframe *parent_trapframe, pid_t *retval);
-#endif /*OPT_A2*/
+int execv(const char *programe, char **args);
+
+#endif //OPT_A2
 
 #endif // UW
 
 #endif /* _SYSCALL_H_ */
+
+
+
